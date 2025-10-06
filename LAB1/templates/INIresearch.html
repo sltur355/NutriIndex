@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Заявка #{{.cart.ID}} - NutriScan</title>
+    <link rel="stylesheet" href="/static/styles/INIresearch.css">
+</head>
+<body>
+    <header>
+        <h1>
+            <a href="/biomarkers" class="home-link">NutriScan</a>
+        </h1>
+    </header>
+
+    <main class="container">
+        <h2 class="biomarkers-title">
+            Оценка питания по индексу Нутритивной недостаточности (INI) 
+        </h2>
+
+        <div class="calculation-card">
+            <!-- Информация о пользователе -->
+            <div class="patient-info">
+                <div class="patient-name">{{.INIresearch.PatientName}}</div>
+                <div class="patient-details">
+                    <div class="detail-row">Дата рождения: {{.INIresearch.PatientBirth}}</div>
+                    <div class="detail-row">Пол: {{.INIresearch.PatientGender}}</div>
+                    <div class="result-section">
+                        <button class="calculate-btn">РЕЗУЛЬТАТ INI:</button>
+                        <span class="result-value">{{.INIresearch.INIResult}}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Таблица показателей -->
+            <div class="biomarkers-table">
+                <!-- Шапка таблицы -->
+                <div class="table-header">
+                    <div class="header-cell research">Исследование</div>
+                    <div class="header-cell">Коэффициент</div>
+                    <div class="header-cell">Референсные значения</div>
+                    <div class="header-cell">Ед. измерения</div>
+                    <div class="header-cell">Значение пациента</div>
+                </div>
+
+                <!-- Строки с показателями -->
+                {{range .INIresearch.INIresearchItems}}
+                <div class="table-row">
+                    <div class="cell biomarker-img">
+                        <img src="{{.BiomarkerImage}}" alt="{{.BiomarkerName}}">
+                    </div>
+                    <div class="cell biomarker-name">{{.BiomarkerName}}</div>
+                    <div class="cell">{{.Significance}}</div>
+                    <div class="cell">{{.MinValue}} - {{.MaxValue}}</div>
+                    <div class="cell">{{.MeasureUnit}}</div>
+                    <div class="cell patient-value">
+                        <input type="text" value="{{.PatientValue}}" placeholder="Введите значение" readonly>
+                    </div>
+                </div>
+                {{else}}
+                <div class="table-row">
+                    <div class="cell" colspan="6" style="text-align: center;">Нет данных</div>
+                </div>
+                {{end}}
+            </div>
+        </div>
+    </main>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ .biomarker.Name }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles/DetailedBiomarker.css">
+</head>
+<body>
+    <header> 
+        <h1>
+            <a href="/biomarkers" class="home-link">NutriScan</a>
+        </h1>
+    </header>
+
+    <main>
+        <div class="card">
+            <img class="biomarker-image" 
+                 src="{{ .biomarker.ImageURL }}" 
+                 alt="{{ .biomarker.Name }}">
+            
+            <div class="content">
+                <h2>{{ .biomarker.Name }}</h2>
+                
+                <div class="detail-item">
+                    {{ .biomarker.FullDescription }}
+                </div>
+                
+                <div class="detail-item">
+                    <strong>Референсные значения:</strong>
+                    {{ .biomarker.MinValue }} - {{ .biomarker.MaxValue }} {{ .biomarker.MeasureUnit }}
+                </div>
+                
+                <div class="detail-item">
+                    <strong>Коэффициент значимости:</strong>
+                    {{ .biomarker.Significance }}
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

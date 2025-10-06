@@ -1,0 +1,229 @@
+body {
+    font-family: 'Graphik LCG', 'Inter', Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #ffffff;
+}
+
+header {
+    background-color: #ffffff;
+    height: 70px;
+    border-bottom: 1px solid #D7D6D6;
+    display: flex;
+    align-items: center;
+}
+
+.home-link {
+    text-decoration: none;
+    color: #0097B3;
+    font-weight: 700;
+    font-size: 30px;
+    margin-left: 30px;
+}
+
+.biomarkers-title{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 30px;
+    font-weight: 300;
+    font-family: 'Graphik LCG', 'Inter', Arial, sans-serif;
+    
+    margin-bottom: 50px;
+}
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 30px;
+}
+
+/* Карточка заявки */
+.calculation-card {
+    
+    border-radius: 0;
+    overflow: hidden;
+}
+
+/* Информация о пациенте */
+.patient-info {
+    background-color: #F3FAFB;
+    padding: 30px;
+}
+
+.patient-name {
+    font-weight: 700;
+    font-size: 30px;
+    color: #13353F;
+    margin-bottom: 9px;
+}
+
+.patient-details {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.detail-row {
+    font-size: 20px;
+    color: #405258;
+    font-weight: 300;
+}
+
+/* Таблица показателей */
+.biomarkers-table {
+    width: 100%;
+    padding: 20px 0; /* Отступы сверху и снизу таблицы */
+}
+
+/* Шапка таблицы */
+.table-header {
+    display: flex;
+    background-color: #0097B3;
+    height: 84px;
+    align-items: center;
+    font-weight: 600;
+    font-size: 20px;
+    color: #ffffff;
+    margin-bottom: 15px; /* Отступ между шапкой и карточками */
+}
+
+.header-cell {
+    flex: 1;
+    padding: 0 20px;
+    text-align: left;
+}
+
+.header-cell:first-child {
+    flex: 1.2; /* Немного больше места для исследования с картинкой */
+}
+
+.research{
+    padding: 0 30px;
+}
+
+/* Строки таблицы (карточки) */
+.table-row {
+    display: flex;
+    height: 100px; /* Увеличиваем высоту для картинки */
+    align-items: center;
+    background-color: #ffffff;
+    border: 1px solid #D7D6D6;
+    border-radius: 8px;
+    margin-bottom: 10px; /* Отступ между карточками */
+    padding: 0 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.table-row:last-child {
+    margin-bottom: 0;
+}
+
+.cell {
+    flex: 1;
+    padding: 0 15px;
+    text-align: left;
+}
+
+/* Ячейка с изображением и названием */
+.biomarker-img {
+    flex: 0.3; /* Меньше места для картинки */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 20px;
+}
+
+.biomarker-img img {
+    width: 50px;
+    height: 50px;
+    object-fit: contain;
+    border-radius: 4px;
+}
+
+.biomarker-name {
+    flex: 0.9; /* Оставшееся место для названия */
+    font-size: 25px;
+    font-weight: 300;
+    color: #405258;
+    display: flex;
+    align-items: center;
+}
+
+/* Поле ввода значения пациента */
+.patient-value {
+    display: flex;
+    align-items: center;
+}
+
+.patient-value input {
+    width: 120px;
+    padding: 8px 12px;
+    border: 1px solid #D7D6D6;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: 300;
+    background-color: #F3FAFB;
+}
+
+.patient-value input:focus {
+    outline: none;
+    border-color: #0097B3;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+    .table-header,
+    .table-row {
+        flex-wrap: wrap;
+        height: auto;
+        padding: 15px;
+    }
+    
+    .header-cell,
+    .cell {
+        flex: 1 0 50%;
+        margin-bottom: 10px;
+    }
+    
+    .biomarker-img {
+        flex: 0 0 60px;
+    }
+}
+
+
+.result-section {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+/* Кнопка с текстом "РЕЗУЛЬТАТ INI:" */
+.calculate-btn {
+    background-color: #F36B2B;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 20px;
+    border: none;
+    border-radius: 8px;
+    padding: 4px 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    white-space: nowrap;
+}
+
+.calculate-btn:hover {
+    background-color: #E05A1A;
+}
+
+.calculate-btn:active {
+    background-color: #C8490A;
+}
+
+/* Числовое значение результата */
+.result-value {
+    font-size: 20px;
+    color: #405258;
+    font-weight: 600;
+    margin-left: 5px;
+}
