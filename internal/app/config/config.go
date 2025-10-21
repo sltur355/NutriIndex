@@ -1,6 +1,5 @@
 package config
 
-//в данном файле будем распаршировать config.toml
 import (
 	"os"
 
@@ -12,6 +11,15 @@ import (
 type Config struct {
 	ServiceHost string
 	ServicePort int
+	MinIO       MinIOConfig
+}
+
+type MinIOConfig struct {
+	Endpoint        string
+	AccessKeyID     string
+	SecretAccessKey string
+	BucketName      string
+	UseSSL          bool
 }
 
 func NewConfig() (*Config, error) {
@@ -34,9 +42,8 @@ func NewConfig() (*Config, error) {
 		return nil, err
 	}
 
-	cfg := &Config{}           // создаем объект конфига
-	err = viper.Unmarshal(cfg) // читаем информацию из файла,
-	// конвертируем и затем кладем в нашу переменную cfg
+	cfg := &Config{}
+	err = viper.Unmarshal(cfg)
 	if err != nil {
 		return nil, err
 	}

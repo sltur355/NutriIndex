@@ -11,6 +11,24 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// @title NutriScan API
+// @version 1.0
+// @description API для расчета индекса нутритивной недостаточности
+
+// @contact.name API Support
+// @contact.url http://localhost:8081
+// @contact.email support@nutriscan.ru
+
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+
+// @host localhost:8081
+// @BasePath /api
+
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name Authorization
+
 func main() {
 	router := gin.Default()
 
@@ -24,8 +42,15 @@ func main() {
 	postgresString := dsn.FromEnv()
 	logrus.Info("Connecting to database...")
 
-	// Инициализируем репозиторий
-	repo, err := repository.NewINIModel(postgresString)
+	// Инициализируем репозиторий с MinIO (как в примере с Хроникой)
+	repo, err := repository.NewINIModel(
+		postgresString,
+		conf.MinIO.Endpoint,
+		conf.MinIO.AccessKeyID,
+		conf.MinIO.SecretAccessKey,
+		conf.MinIO.BucketName,
+		conf.MinIO.UseSSL,
+	)
 	if err != nil {
 		logrus.Fatalf("error initializing repository: %v", err)
 	}
