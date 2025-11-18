@@ -1,0 +1,998 @@
+basePath: /api
+definitions:
+  ds.Biomarker:
+    description: Медицинский биомаркер для исследований
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      full_description:
+        type: string
+      id:
+        type: integer
+      image_url:
+        type: string
+      is_active:
+        type: boolean
+      max_value:
+        type: number
+      measure_unit:
+        type: string
+      min_value:
+        type: number
+      name:
+        type: string
+      significance:
+        type: number
+      updated_at:
+        type: string
+    type: object
+  ds.BiomarkerItemResponse:
+    properties:
+      description:
+        type: string
+      id:
+        type: integer
+      image_url:
+        type: string
+      max_value:
+        type: number
+      measure_unit:
+        type: string
+      min_value:
+        type: number
+      name:
+        type: string
+      patient_value:
+        type: number
+      significance:
+        type: number
+    type: object
+  ds.INIResearchStatus:
+    enum:
+    - черновик
+    - удалён
+    - сформирован
+    - завершён
+    - отклонён
+    type: string
+    x-enum-varnames:
+    - StatusDraft
+    - StatusDeleted
+    - StatusFormed
+    - StatusCompleted
+    - StatusRejected
+  ds.LoginRequest:
+    description: Данные для входа в систему
+    properties:
+      login:
+        example: doctor_user
+        type: string
+      password:
+        example: securepassword123
+        type: string
+    required:
+    - login
+    - password
+    type: object
+  ds.RegisterRequest:
+    description: Данные для регистрации нового пользователя
+    properties:
+      login:
+        example: new_user
+        type: string
+      password:
+        example: securepassword123
+        type: string
+      role:
+        enum:
+        - patient
+        - doctor
+        - admin
+        example: patient
+        type: string
+    required:
+    - login
+    - password
+    type: object
+  ds.ResearchWithBiomarkersResponse:
+    properties:
+      biomarkers:
+        description: Биомаркеры с нужными полями для фронтенда
+        items:
+          $ref: '#/definitions/ds.BiomarkerItemResponse'
+        type: array
+      completed_at:
+        type: string
+      created_at:
+        type: string
+      creator_login:
+        type: string
+      formed_at:
+        type: string
+      id:
+        type: integer
+      ini_result:
+        type: number
+      moderator_login:
+        type: string
+      patient_birth:
+        type: string
+      patient_gender:
+        type: string
+      patient_name:
+        type: string
+      status:
+        $ref: '#/definitions/ds.INIResearchStatus'
+    type: object
+  ds.UpdateUserRequest:
+    description: Данные для обновления профиля пользователя
+    properties:
+      login:
+        example: new_login
+        type: string
+      role:
+        enum:
+        - patient
+        - doctor
+        - admin
+        example: doctor
+        type: string
+    type: object
+host: localhost:8081
+info:
+  contact:
+    email: support@nutriscan.ru
+    name: API Support
+    url: http://localhost:8081
+  description: API для расчета индекса нутритивной недостаточности
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  title: NutriScan API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Выполняет вход пользователя в систему и возвращает JWT токен
+      parameters:
+      - description: Данные для входа
+        in: body
+        name: login
+        required: true
+        schema:
+          $ref: '#/definitions/ds.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешная аутентификация
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Неверные данные
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Неверные учетные данные
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Аутентификация пользователя
+      tags:
+      - Аутентификация
+  /auth/logout:
+    post:
+      description: Выполняет выход пользователя и добавляет токен в blacklist
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешный выход
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Неверный токен
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Не авторизован
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Выход из системы
+      tags:
+      - Аутентификация
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Создает нового пользователя в системе
+      parameters:
+      - description: Данные для регистрации
+        in: body
+        name: register
+        required: true
+        schema:
+          $ref: '#/definitions/ds.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Пользователь создан
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Неверные данные
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Пользователь уже существует
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Регистрация пользователя
+      tags:
+      - Аутентификация
+  /biomarkers:
+    get:
+      description: Возвращает список всех биомаркеров с возможностью фильтрации по
+        названию
+      parameters:
+      - description: Фильтр по названию биомаркера
+        in: query
+        name: name
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешный ответ
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Получить список биомаркеров
+      tags:
+      - Биомаркеры
+    post:
+      consumes:
+      - application/json
+      description: Создает новый биомаркер в системе (только для администраторов)
+      parameters:
+      - description: Данные биомаркера
+        in: body
+        name: biomarker
+        required: true
+        schema:
+          $ref: '#/definitions/ds.Biomarker'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Биомаркер создан
+          schema:
+            $ref: '#/definitions/ds.Biomarker'
+        "400":
+          description: Неверные данные
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Не авторизован
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Недостаточно прав
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Создать новый биомаркер
+      tags:
+      - Биомаркеры
+  /biomarkers/{id}:
+    delete:
+      description: Удаляет биомаркер и его изображение из MinIO (только для администраторов)
+      parameters:
+      - description: ID биомаркера
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Биомаркер удален
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Неверный ID
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Не авторизован
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Недостаточно прав
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Биомаркер не найден
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Удалить биомаркер
+      tags:
+      - Биомаркеры
+    get:
+      description: Возвращает детальную информацию о биомаркере
+      parameters:
+      - description: ID биомаркера
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешный ответ
+          schema:
+            $ref: '#/definitions/ds.Biomarker'
+        "400":
+          description: Неверный ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Биомаркер не найден
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Получить биомаркер по ID
+      tags:
+      - Биомаркеры
+    put:
+      consumes:
+      - application/json
+      description: Обновляет информацию о биомаркере (только для администраторов)
+      parameters:
+      - description: ID биомаркера
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Обновленные данные биомаркера
+        in: body
+        name: biomarker
+        required: true
+        schema:
+          $ref: '#/definitions/ds.Biomarker'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Биомаркер обновлен
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Неверные данные
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Не авторизован
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Недостаточно прав
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Биомаркер не найден
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Обновить биомаркер
+      tags:
+      - Биомаркеры
+  /biomarkers/{id}/add_to_research:
+    post:
+      description: Добавляет биомаркер в черновик исследования (только для врачей)
+      parameters:
+      - description: ID биомаркера
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Биомаркер добавлен в исследование
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Неверный ID
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Не авторизован
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Недостаточно прав
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Биомаркер не найден
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Добавить биомаркер в исследование
+      tags:
+      - Исследования
+  /biomarkers/{id}/image:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Загружает изображение для биомаркера в MinIO (только для администраторов)
+      parameters:
+      - description: ID биомаркера
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Изображение биомаркера
+        in: formData
+        name: image
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Изображение загружено
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Неверные данные
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Не авторизован
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Недостаточно прав
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Биомаркер не найден
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Загрузить изображение биомаркера
+      tags:
+      - Биомаркеры
+  /research_biomarkers/{research_id}/biomarkers/{biomarker_id}:
+    delete:
+      description: Удаляет биомаркер из исследования (только для врачей)
+      parameters:
+      - description: ID исследования
+        in: path
+        name: research_id
+        required: true
+        type: integer
+      - description: ID биомаркера
+        in: path
+        name: biomarker_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Биомаркер удален из исследования
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Неверные данные
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Не авторизован
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Недостаточно прав
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Исследование или биомаркер не найдены
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Удалить биомаркер из исследования
+      tags:
+      - Исследования
+    put:
+      consumes:
+      - application/json
+      description: Обновляет значение пациента для биомаркера в исследовании (только
+        для врачей)
+      parameters:
+      - description: ID исследования
+        in: path
+        name: research_id
+        required: true
+        type: integer
+      - description: ID биомаркера
+        in: path
+        name: biomarker_id
+        required: true
+        type: integer
+      - description: Обновляемые поля
+        in: body
+        name: updates
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Значение обновлено
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Неверные данные
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Не авторизован
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Недостаточно прав
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Исследование или биомаркер не найдены
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Обновить значение биомаркера в исследовании
+      tags:
+      - Исследования
+  /researches:
+    get:
+      description: Возвращает список исследований с возможностью фильтрации по статусу
+        и дате
+      parameters:
+      - description: Фильтр по статусу
+        in: query
+        name: status
+        type: string
+      - description: 'Начальная дата (формат: 2006-01-02)'
+        in: query
+        name: start_date
+        type: string
+      - description: 'Конечная дата (формат: 2006-01-02)'
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешный ответ
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Не авторизован
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Недостаточно прав
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Получить список исследований
+      tags:
+      - Исследования
+  /researches/{id}:
+    delete:
+      description: Удаляет исследование (только создатель для черновиков)
+      parameters:
+      - description: ID исследования
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Исследование удалено
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Неверные данные
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Не авторизован
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Недостаточно прав
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Исследование не найдено
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Удалить исследование
+      tags:
+      - Исследования
+    get:
+      description: Возвращает детальную информацию об исследовании с биомаркерами
+      parameters:
+      - description: ID исследования
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешный ответ
+          schema:
+            $ref: '#/definitions/ds.ResearchWithBiomarkersResponse'
+        "400":
+          description: Неверный ID
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Не авторизован
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Недостаточно прав
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Исследование не найдено
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Получить исследование по ID
+      tags:
+      - Исследования
+    put:
+      consumes:
+      - application/json
+      description: Обновляет информацию о пациенте в исследовании (только для врачей)
+      parameters:
+      - description: ID исследования
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Информация о пациенте
+        in: body
+        name: patient_info
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Исследование обновлено
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Неверные данные
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Не авторизован
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Недостаточно прав
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Исследование не найдено
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Обновить информацию об исследовании
+      tags:
+      - Исследования
+  /researches/{id}/complete:
+    put:
+      consumes:
+      - application/json
+      description: Завершает или отклоняет сформированное исследование (только для
+        модераторов)
+      parameters:
+      - description: ID исследования
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Действие
+        in: body
+        name: action
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Исследование завершено/отклонено
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Неверные данные
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Не авторизован
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Недостаточно прав
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Исследование не найдено
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Завершить или отклонить исследование
+      tags:
+      - Исследования
+  /researches/{id}/form:
+    put:
+      description: Переводит исследование из статуса черновика в сформированный (только
+        создатель)
+      parameters:
+      - description: ID исследования
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Исследование сформировано
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Неверные данные или пустое исследование
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Не авторизован
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Недостаточно прав
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Исследование не найдено
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Сформировать исследование
+      tags:
+      - Исследования
+  /researches/cart:
+    get:
+      description: Возвращает ID черновика и количество биомаркеров в корзине
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешный ответ
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Не авторизован
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Получить информацию о корзине исследований
+      tags:
+      - Исследования
+  /users/profile:
+    get:
+      description: Возвращает информацию о пользователе по ID
+      parameters:
+      - description: ID пользователя
+        in: query
+        name: user_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешный ответ
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Неверный ID
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Не авторизован
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Пользователь не найден
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Получить профиль пользователя
+      tags:
+      - Пользователи
+    put:
+      consumes:
+      - application/json
+      description: Обновляет информацию о пользователе
+      parameters:
+      - description: ID пользователя
+        in: query
+        name: user_id
+        required: true
+        type: string
+      - description: Обновляемые поля
+        in: body
+        name: updates
+        required: true
+        schema:
+          $ref: '#/definitions/ds.UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Профиль обновлен
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Неверные данные
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Не авторизован
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Пользователь не найден
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Обновить профиль пользователя
+      tags:
+      - Пользователи
+securityDefinitions:
+  ApiKeyAuth:
+    description: Введите "Bearer [ваш_JWT_токен]" для авторизации
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
+x-extension-openapi:
+  example: value

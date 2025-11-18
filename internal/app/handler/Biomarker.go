@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"LAB1/internal/app/ds"
+	"LAB1/internal/app/middleware"
 
 	"github.com/gin-gonic/gin"
 )
@@ -30,14 +31,38 @@ func (h *INIController) GetBiomarkersAPI(ctx *gin.Context) {
 		return
 	}
 
+	// ИЗМЕНЕНИЕ: Получаем информацию о корзине только для авторизованных пользователей
+	var researchID uint = 0
+	var count int = 0
+
+	// Проверяем авторизацию пользователя
+	if userID, exists := middleware.GetUserID(ctx); exists {
+		researchID, count, err = h.INIModel.GetDraftRequestInfo(userID)
+		if err != nil {
+			// Не прерываем выполнение если ошибка получения корзины
+			count = 0
+			researchID = 0
+		}
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"data":   biomarkers,
-		"total":  len(biomarkers),
+		"data":        biomarkers,
+		"total":       len(biomarkers),
+		"cart_count":  count,      // ИЗМЕНЕНИЕ: Добавляем количество в корзине
+		"research_id": researchID, // ИЗМЕНЕНИЕ: Добавляем ID исследования
 	})
 }
 
-// GetBiomarkerAPI - GET /api/biomarkers/:id
+// GetBiomarkerAPI godoc
+// @Summary Получить биомаркер по ID
+// @Description Возвращает детальную информацию о биомаркере
+// @Tags Биомаркеры
+// @Produce json
+// @Param id path int true "ID биомаркера"
+// @Success 200 {object} ds.Biomarker "Успешный ответ"
+// @Failure 400 {object} map[string]interface{} "Неверный ID"
+// @Failure 404 {object} map[string]interface{} "Биомаркер не найден"
+// @Router /biomarkers/{id} [get]
 func (h *INIController) GetBiomarkerAPI(ctx *gin.Context) {
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -52,88 +77,24 @@ func (h *INIController) GetBiomarkerAPI(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"data":   biomarker,
-	})
+	ctx.JSON(http.StatusOK, biomarker)
 }
 
-// CreateBiomarkerAPI - POST /api/biomarkers
-func (h *INIController) CreateBiomarkerAPI(ctx *gin.Context) {
-	var biomarker ds.Biomarker
-	if err := ctx.ShouldBindJSON(&biomarker); err != nil {
-		h.errorHandler(ctx, http.StatusBadRequest, err)
-		return
-	}
-
-	createdBiomarker, err := h.INIModel.CreateBiomarker(biomarker)
-	if err != nil {
-		h.errorHandler(ctx, http.StatusInternalServerError, err)
-		return
-	}
-
-	ctx.JSON(http.StatusCreated, gin.H{
-		"status": "success",
-		"data":   createdBiomarker,
-	})
-}
-
-func (h *INIController) UpdateBiomarkerAPI(ctx *gin.Context) {
-	idStr := ctx.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		h.errorHandler(ctx, http.StatusBadRequest, err)
-		return
-	}
-
-	var biomarker ds.Biomarker
-	if err := ctx.ShouldBindJSON(&biomarker); err != nil {
-		h.errorHandler(ctx, http.StatusBadRequest, err)
-		return
-	}
-
-	err = h.INIModel.UpdateBiomarker(uint(id), biomarker)
-	if err != nil {
-		if err.Error() == "biomarker not found" {
-			h.errorHandler(ctx, http.StatusNotFound, err)
-		} else {
-			h.errorHandler(ctx, http.StatusInternalServerError, err)
-		}
-		return
-	}
-
-	ctx.JSON(http.StatusOK, gin.H{
-		"status":  "success",
-		"message": "Biomarker updated successfully",
-	})
-}
-
-// DeleteBiomarkerAPI - DELETE /api/biomarkers/:id
-func (h *INIController) DeleteBiomarkerAPI(ctx *gin.Context) {
-	idStr := ctx.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		h.errorHandler(ctx, http.StatusBadRequest, err)
-		return
-	}
-
-	err = h.INIModel.DeleteBiomarker(uint(id))
-	if err != nil {
-		if err.Error() == "biomarker not found" {
-			h.errorHandler(ctx, http.StatusNotFound, err)
-		} else {
-			h.errorHandler(ctx, http.StatusInternalServerError, err)
-		}
-		return
-	}
-
-	ctx.JSON(http.StatusOK, gin.H{
-		"status":  "success",
-		"message": "Biomarker deleted successfully",
-	})
-}
-
-// UploadBiomarkerImageAPI - POST /api/biomarkers/:id/image
+// UploadBiomarkerImageAPI godoc
+// @Summary Загрузить изображение биомаркера
+// @Description Загружает изображение для биомаркера в MinIO (только для администраторов)
+// @Tags Биомаркеры
+// @Security ApiKeyAuth
+// @Accept multipart/form-data
+// @Produce json
+// @Param id path int true "ID биомаркера"
+// @Param image formData file true "Изображение биомаркера"
+// @Success 200 {object} map[string]interface{} "Изображение загружено"
+// @Failure 400 {object} map[string]interface{} "Неверные данные"
+// @Failure 401 {object} map[string]interface{} "Не авторизован"
+// @Failure 403 {object} map[string]interface{} "Недостаточно прав"
+// @Failure 404 {object} map[string]interface{} "Биомаркер не найден"
+// @Router /biomarkers/{id}/image [post]
 func (h *INIController) UploadBiomarkerImageAPI(ctx *gin.Context) {
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -191,14 +152,141 @@ func (h *INIController) UploadBiomarkerImageAPI(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"status":    "success",
 		"message":   "Image uploaded successfully",
 		"image_url": imageURL,
 	})
 }
 
-// AddBiomarkerToResearchAPI - POST /api/biomarkers/:id/add_to_research
+// CreateBiomarkerAPI godoc
+// @Summary Создать новый биомаркер
+// @Description Создает новый биомаркер в системе (только для администраторов)
+// @Tags Биомаркеры
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Param biomarker body ds.Biomarker true "Данные биомаркера"
+// @Success 201 {object} ds.Biomarker "Биомаркер создан"
+// @Failure 400 {object} map[string]interface{} "Неверные данные"
+// @Failure 401 {object} map[string]interface{} "Не авторизован"
+// @Failure 403 {object} map[string]interface{} "Недостаточно прав"
+// @Router /biomarkers [post]
+func (h *INIController) CreateBiomarkerAPI(ctx *gin.Context) {
+	var biomarker ds.Biomarker
+	if err := ctx.ShouldBindJSON(&biomarker); err != nil {
+		h.errorHandler(ctx, http.StatusBadRequest, err)
+		return
+	}
+
+	createdBiomarker, err := h.INIModel.CreateBiomarker(biomarker)
+	if err != nil {
+		h.errorHandler(ctx, http.StatusInternalServerError, err)
+		return
+	}
+
+	ctx.JSON(http.StatusCreated, createdBiomarker)
+}
+
+// UpdateBiomarkerAPI godoc
+// @Summary Обновить биомаркер
+// @Description Обновляет информацию о биомаркере (только для администраторов)
+// @Tags Биомаркеры
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Param id path int true "ID биомаркера"
+// @Param biomarker body ds.Biomarker true "Обновленные данные биомаркера"
+// @Success 200 {object} map[string]interface{} "Биомаркер обновлен"
+// @Failure 400 {object} map[string]interface{} "Неверные данные"
+// @Failure 401 {object} map[string]interface{} "Не авторизован"
+// @Failure 403 {object} map[string]interface{} "Недостаточно прав"
+// @Failure 404 {object} map[string]interface{} "Биомаркер не найден"
+// @Router /biomarkers/{id} [put]
+func (h *INIController) UpdateBiomarkerAPI(ctx *gin.Context) {
+	idStr := ctx.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		h.errorHandler(ctx, http.StatusBadRequest, err)
+		return
+	}
+
+	var biomarker ds.Biomarker
+	if err := ctx.ShouldBindJSON(&biomarker); err != nil {
+		h.errorHandler(ctx, http.StatusBadRequest, err)
+		return
+	}
+
+	err = h.INIModel.UpdateBiomarker(uint(id), biomarker)
+	if err != nil {
+		if err.Error() == "biomarker not found" {
+			h.errorHandler(ctx, http.StatusNotFound, err)
+		} else {
+			h.errorHandler(ctx, http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "Biomarker updated successfully",
+	})
+}
+
+// DeleteBiomarkerAPI godoc
+// @Summary Удалить биомаркер
+// @Description Удаляет биомаркер и его изображение из MinIO (только для администраторов)
+// @Tags Биомаркеры
+// @Security ApiKeyAuth
+// @Produce json
+// @Param id path int true "ID биомаркера"
+// @Success 200 {object} map[string]interface{} "Биомаркер удален"
+// @Failure 400 {object} map[string]interface{} "Неверный ID"
+// @Failure 401 {object} map[string]interface{} "Не авторизован"
+// @Failure 403 {object} map[string]interface{} "Недостаточно прав"
+// @Failure 404 {object} map[string]interface{} "Биомаркер не найден"
+// @Router /biomarkers/{id} [delete]
+func (h *INIController) DeleteBiomarkerAPI(ctx *gin.Context) {
+	idStr := ctx.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		h.errorHandler(ctx, http.StatusBadRequest, err)
+		return
+	}
+
+	err = h.INIModel.DeleteBiomarker(uint(id))
+	if err != nil {
+		if err.Error() == "biomarker not found" {
+			h.errorHandler(ctx, http.StatusNotFound, err)
+		} else {
+			h.errorHandler(ctx, http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "Biomarker deleted successfully",
+	})
+}
+
+// AddBiomarkerToINIResearchAPI godoc
+// @Summary Добавить биомаркер в исследование
+// @Description Добавляет биомаркер в черновик исследования (только для врачей)
+// @Tags Исследования
+// @Security ApiKeyAuth
+// @Produce json
+// @Param id path int true "ID биомаркера"
+// @Success 200 {object} map[string]interface{} "Биомаркер добавлен в исследование"
+// @Failure 400 {object} map[string]interface{} "Неверный ID"
+// @Failure 401 {object} map[string]interface{} "Не авторизован"
+// @Failure 403 {object} map[string]interface{} "Недостаточно прав"
+// @Failure 404 {object} map[string]interface{} "Биомаркер не найден"
+// @Router /biomarkers/{id}/add_to_research [post]
 func (h *INIController) AddBiomarkerToINIResearchAPI(ctx *gin.Context) {
+	// Получаем creatorID из контекста
+	creatorID, exists := middleware.GetUserID(ctx)
+	if !exists {
+		h.errorHandler(ctx, http.StatusUnauthorized, fmt.Errorf("user not authenticated"))
+		return
+	}
+
 	idStr := ctx.Param("id")
 	biomarkerID, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -217,15 +305,14 @@ func (h *INIController) AddBiomarkerToINIResearchAPI(ctx *gin.Context) {
 		return
 	}
 
-	// Добавляем биомаркер в черновик исследования
-	researchID, err := h.INIModel.AddBiomarkerToDraftINIResearch(uint(biomarkerID))
+	// Добавляем биомаркер в черновик исследования с реальным creatorID
+	researchID, err := h.INIModel.AddBiomarkerToDraftINIResearch(uint(biomarkerID), creatorID)
 	if err != nil {
 		h.errorHandler(ctx, http.StatusInternalServerError, err)
 		return
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"status":      "success",
 		"message":     "Biomarker added to draft research successfully",
 		"research_id": researchID,
 	})

@@ -1,72 +1,105 @@
 package handler
 
 import (
+	"LAB1/internal/app/middleware"
 	"LAB1/internal/app/repository"
+	"LAB1/internal/app/role"
+	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"github.com/sirupsen/logrus"
 )
 
 type INIController struct {
-	INIModel *repository.INIModel
+	INIModel    *repository.INIModel
+	JWTSecret   string
+	redisClient *redis.Client // Добавляем Redis клиент
 }
 
-func NewINIController(r *repository.INIModel) *INIController {
+func NewINIController(r *repository.INIModel, redisClient *redis.Client) *INIController {
+	// Получаем JWT секрет
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "fallback-secret-key-change-in-production"
+	}
+
 	return &INIController{
-		INIModel: r,
+		INIModel:    r,
+		JWTSecret:   jwtSecret,
+		redisClient: redisClient,
 	}
 }
 
-// RegisterHandler регистрирует маршруты
+// RegisterAPI регистрирует маршруты
 func (h *INIController) RegisterAPI(router *gin.Engine) {
 	api := router.Group("/api")
 	{
-		// Домен биомаркеров
-		biomarkers := api.Group("/biomarkers")
+		// Публичные маршруты (доступны без аутентификации)
+		public := api.Group("/")
 		{
-			biomarkers.GET("", h.GetBiomarkersAPI)
-			biomarkers.GET("/:id", h.GetBiomarkerAPI)
-			biomarkers.POST("", h.CreateBiomarkerAPI)
-			biomarkers.PUT("/:id", h.UpdateBiomarkerAPI)
-			biomarkers.DELETE("/:id", h.DeleteBiomarkerAPI)
-			biomarkers.POST("/:id/add_to_research", h.AddBiomarkerToINIResearchAPI)
-			biomarkers.POST("/:id/image", h.UploadBiomarkerImageAPI)
+			// Аутентификация
+			public.POST("/auth/login", h.LoginUserAPI)
+			public.POST("/auth/register", h.RegisterUserAPI)
+			public.POST("/auth/session-login", h.SessionLoginAPI)
+
+			// Просмотр биомаркеров (доступно всем)
+			public.GET("/biomarkers", h.GetBiomarkersAPI)
+			public.GET("/biomarkers/:id", h.GetBiomarkerAPI)
 		}
 
-		// Домен исследований
-		researches := api.Group("/researches")
+		// Защищенные маршруты (требуют аутентификации)
+		protected := api.Group("/")
+		protected.Use(middleware.AuthMiddleware(h.JWTSecret, h.redisClient))
 		{
-			researches.GET("/cart", h.GetINIResearchCartAPI)
-			researches.GET("", h.GetINIResearchesAPI)
-			researches.GET("/:id", h.GetINIResearchAPI)
-			researches.PUT("/:id", h.UpdateINIResearchAPI)
-			researches.PUT("/:id/form", h.FormINIResearchAPI)
-			researches.PUT("/:id/complete", h.CompleteOrRejectINIResearchAPI)
-			researches.DELETE("/:id", h.DeleteINIResearchAPI)
+			// Выход
+			protected.POST("/auth/logout", h.LogoutUserAPI)
+
+			// Профиль пользователя
+			protected.GET("/users/profile", h.GetUserProfileAPI)
+			protected.PUT("/users/profile", h.UpdateUserProfileAPI)
+
+			// Корзина исследований (доступна всем аутентифицированным)
+			protected.GET("/researches/cart", h.GetINIResearchCartAPI)
+
+			// Исследования - ОДИН маршрут для всех, доступ по ролям внутри метода
+			protected.GET("/researches", h.GetINIResearchesAPI)
+			protected.GET("/researches/:id", h.GetINIResearchAPI)
+			protected.PUT("/researches/:id", h.UpdateINIResearchAPI)
+			protected.POST("/biomarkers/:id/add_to_research", h.AddBiomarkerToINIResearchAPI)
+			protected.PUT("/research_biomarkers/:research_id/biomarkers/:biomarker_id", h.UpdateResearchBiomarkerAPI)
+			protected.DELETE("/research_biomarkers/:research_id/biomarkers/:biomarker_id", h.DeleteResearchBiomarkerAPI)
 		}
 
-		// Домен М-М (ResearchBiomarker)
-		researchBiomarkers := api.Group("/research_biomarkers")
+		// Маршруты только для пациентов
+		patient := api.Group("/")
+		patient.Use(middleware.AuthMiddleware(h.JWTSecret, h.redisClient))
+		patient.Use(middleware.RoleMiddleware(role.Patient))
 		{
-			researchBiomarkers.PUT("/:research_id/biomarkers/:biomarker_id", h.UpdateResearchBiomarkerAPI)
-			researchBiomarkers.DELETE("/:research_id/biomarkers/:biomarker_id", h.DeleteResearchBiomarkerAPI)
+			// Пациенты могут формировать и удалять только свои исследования
+			patient.PUT("/researches/:id/form", h.FormINIResearchAPI)
+			patient.DELETE("/researches/:id", h.DeleteINIResearchAPI)
 		}
 
-		// Домен пользователей
-		users := api.Group("/users")
+		// Маршруты только для врачей (модераторов)
+		doctor := api.Group("/")
+		doctor.Use(middleware.AuthMiddleware(h.JWTSecret, h.redisClient))
+		doctor.Use(middleware.RoleMiddleware(role.Doctor))
 		{
-			users.POST("/register", h.RegisterUserAPI)
-			users.POST("/auth", h.AuthenticateUserAPI)
-			users.POST("/logout", h.LogoutUserAPI)
-			users.GET("/profile", h.GetUserProfileAPI)
-			users.PUT("/profile", h.UpdateUserProfileAPI)
+			// Врачи могут завершать/отклонять исследования
+			doctor.PUT("/researches/:id/complete", h.CompleteOrRejectINIResearchAPI)
+
+			// Управление биомаркерами (CRUD)
+			doctor.POST("/biomarkers", h.CreateBiomarkerAPI)
+			doctor.PUT("/biomarkers/:id", h.UpdateBiomarkerAPI)
+			doctor.DELETE("/biomarkers/:id", h.DeleteBiomarkerAPI)
+			doctor.POST("/biomarkers/:id/image", h.UploadBiomarkerImageAPI)
 		}
 	}
 }
 func (h *INIController) errorHandler(ctx *gin.Context, errorStatusCode int, err error) {
 	logrus.Error(err.Error())
 	ctx.JSON(errorStatusCode, gin.H{
-		"status":      "error",
-		"description": err.Error(),
+		"error": err.Error(),
 	})
 }

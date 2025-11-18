@@ -1,3 +1,4 @@
+// C:\RIP\LAB1\cmd\awesomeProject\main.go
 package main
 
 import (
@@ -6,8 +7,11 @@ import (
 	"LAB1/internal/app/handler"
 	"LAB1/internal/app/repository"
 	"LAB1/internal/pkg"
+	"context"
+	"strconv" // ДОБАВЛЯЕМ этот импорт
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"github.com/sirupsen/logrus"
 )
 
@@ -28,9 +32,12 @@ import (
 // @securityDefinitions.apikey ApiKeyAuth
 // @in header
 // @name Authorization
+// @description Введите "Bearer [ваш_JWT_токен]" для авторизации
 
+// @x-extension-openapi {"example": "value"}
 func main() {
 	router := gin.Default()
+	ctx := context.Background()
 
 	// Загружаем конфигурацию
 	conf, err := config.NewConfig()
@@ -38,27 +45,45 @@ func main() {
 		logrus.Fatalf("error loading config: %v", err)
 	}
 
+	logrus.Infof("Service will run on: %s:%d", conf.ServiceHost, conf.ServicePort)
+
 	// Получаем DSN строку
 	postgresString := dsn.FromEnv()
 	logrus.Info("Connecting to database...")
 
-	// Инициализируем репозиторий с MinIO (как в примере с Хроникой)
+	// Инициализируем репозиторий с MinIO
 	repo, err := repository.NewINIModel(
 		postgresString,
-		conf.MinIO.Endpoint,
-		conf.MinIO.AccessKeyID,
-		conf.MinIO.SecretAccessKey,
-		conf.MinIO.BucketName,
-		conf.MinIO.UseSSL,
+		conf.Minio.Endpoint,
+		conf.Minio.AccessKey,
+		conf.Minio.SecretKey,
+		conf.Minio.Bucket,
+		conf.Minio.UseSSL,
 	)
 	if err != nil {
 		logrus.Fatalf("error initializing repository: %v", err)
 	}
 
-	// Инициализируем обработчики
-	hand := handler.NewINIController(repo)
+	// Инициализируем Redis клиент
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     conf.Redis.Host + ":" + strconv.Itoa(conf.Redis.Port),
+		Password: conf.Redis.Password,
+		DB:       0,
+	})
+
+	// Проверяем подключение к Redis
+	_, err = redisClient.Ping(ctx).Result()
+	if err != nil {
+		logrus.Fatalf("error connecting to Redis: %v", err)
+	}
+	logrus.Info("Connected to Redis successfully")
+
+	// Инициализируем обработчики с Redis клиентом
+	hand := handler.NewINIController(repo, redisClient)
 
 	// Создаем и запускаем приложение
 	application := pkg.NewApp(conf, router, hand)
+
+	logrus.Infof("Starting NutriScan API server on %s:%d", conf.ServiceHost, conf.ServicePort)
 	application.RunApp()
 }

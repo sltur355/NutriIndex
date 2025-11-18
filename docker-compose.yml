@@ -1,3 +1,6 @@
+# docker-compose.yml
+version: '3.8'
+
 services:
   # MinIO services
   minio1:
@@ -69,6 +72,15 @@ services:
       - minio2
       - minio3
       - minio4
+  
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - '6379:6379'
+    command: redis-server --save 20 1 --loglevel warning --requirepass password
+    volumes:
+      - redis_data:/data
 
   # Adminer service
   adminer:
@@ -87,3 +99,4 @@ volumes:
   data3-2:
   data4-1:
   data4-2:
+  redis_data:

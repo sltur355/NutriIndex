@@ -40,6 +40,8 @@ func (r *INIModel) GetBiomarker(id uint) (ds.Biomarker, error) {
 // CreateBiomarker - POST создание биомаркера
 func (r *INIModel) CreateBiomarker(biomarker ds.Biomarker) (ds.Biomarker, error) {
 	biomarker.ID = 0 // гарантируем создание новой записи
+	biomarker.CreatedAt = time.Now()
+	biomarker.UpdatedAt = time.Now()
 
 	err := r.db.Create(&biomarker).Error
 	if err != nil {
@@ -50,6 +52,9 @@ func (r *INIModel) CreateBiomarker(biomarker ds.Biomarker) (ds.Biomarker, error)
 
 // UpdateBiomarker - PUT обновление биомаркера
 func (r *INIModel) UpdateBiomarker(id uint, biomarker ds.Biomarker) error {
+	// ИЗМЕНЕНИЕ: Обновляем UpdatedAt
+	biomarker.UpdatedAt = time.Now()
+
 	tx := r.db.Model(&ds.Biomarker{}).Where("id = ?", id).Updates(biomarker)
 	if tx.Error != nil {
 		return tx.Error
@@ -73,8 +78,9 @@ func (r *INIModel) DeleteBiomarker(id uint) error {
 	}
 
 	// Удаляем изображение из MinIO если оно есть
-	if biomarker.ImageURL.Valid && biomarker.ImageURL.String != "" {
-		fileName := extractFileNameFromURL(biomarker.ImageURL.String)
+	// ИЗМЕНЕНИЕ: Проверяем указатель вместо sql.NullString
+	if biomarker.ImageURL != nil && *biomarker.ImageURL != "" {
+		fileName := extractFileNameFromURL(*biomarker.ImageURL)
 		if fileName != "" {
 			ctx := context.Background()
 			err = r.DeleteFileFromMinIO(ctx, fileName)
@@ -98,7 +104,12 @@ func (r *INIModel) DeleteBiomarker(id uint) error {
 
 // UpdateBiomarkerImage - обновление пути к изображению
 func (r *INIModel) UpdateBiomarkerImage(id uint, imagePath string) error {
-	tx := r.db.Model(&ds.Biomarker{}).Where("id = ?", id).Update("image_url", imagePath)
+	// ИЗМЕНЕНИЕ: Используем указатель на строку
+	imageURL := &imagePath
+	tx := r.db.Model(&ds.Biomarker{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"image_url":  imageURL,
+		"updated_at": time.Now(),
+	})
 	if tx.Error != nil {
 		return tx.Error
 	}

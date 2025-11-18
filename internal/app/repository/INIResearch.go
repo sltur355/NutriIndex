@@ -2,19 +2,28 @@ package repository
 
 import (
 	"LAB1/internal/app/ds"
+	"LAB1/internal/app/role"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"gorm.io/gorm"
 )
 
 // GetINIResearchesWithFilters - GET список исследований с фильтрацией
-func (r *INIModel) GetINIResearchesWithFilters(status string, dateFrom, dateTo *time.Time) ([]ds.INIResearch, error) {
+func (r *INIModel) GetINIResearchesWithFilters(userID uint, userRole role.Role, status string, dateFrom, dateTo *time.Time) ([]ds.INIResearch, error) {
 	var researches []ds.INIResearch
-	// Исключаем удаленные и черновики (как в задании)
-	query := r.db.Where("status != ? AND status != ?", ds.StatusDeleted, ds.StatusDraft)
+
+	// Базовый запрос - исключаем удаленные
+	query := r.db.Where("status != ?", ds.StatusDeleted)
+
+	// НОВАЯ ЛОГИКА ФИЛЬТРАЦИИ:
+	// - Patient: видит только СВОИ исследования
+	// - Doctor: видит ВСЕ исследования
+	if userRole == role.Patient {
+		query = query.Where("created_by = ?", userID)
+	}
+	// Doctor видит все исследования без фильтрации
 
 	if status != "" {
 		query = query.Where("status = ?", status)
@@ -31,12 +40,19 @@ func (r *INIModel) GetINIResearchesWithFilters(status string, dateFrom, dateTo *
 	return researches, err
 }
 
-// GetResearchByID - GET одно исследование по ID
-func (r *INIModel) GetINIResearchByID(id uint) (ds.INIResearch, error) {
+// GetINIResearchByID - получает исследование по ID с проверкой прав доступа
+func (r *INIModel) GetINIResearchByID(id uint, userID uint, userRole role.Role) (ds.INIResearch, error) {
 	var research ds.INIResearch
-	err := r.db.Preload("User").Preload("Moderator").
-		Where("id = ? AND status != ?", id, ds.StatusDeleted).
-		First(&research).Error
+
+	query := r.db.Preload("User").Preload("Moderator").
+		Where("id = ? AND status != ?", id, ds.StatusDeleted)
+
+	// Patient может видеть только свои исследования
+	if userRole == role.Patient {
+		query = query.Where("created_by = ?", userID)
+	}
+
+	err := query.First(&research).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ds.INIResearch{}, errors.New("research not found")
@@ -47,8 +63,8 @@ func (r *INIModel) GetINIResearchByID(id uint) (ds.INIResearch, error) {
 }
 
 // GetResearchWithBiomarkers - GET исследование с биомаркерами
-func (r *INIModel) GetINIResearchWithBiomarkers(id uint) (ds.INIResearch, []ds.ResearchBiomarker, error) {
-	research, err := r.GetINIResearchByID(id)
+func (r *INIModel) GetINIResearchWithBiomarkers(id uint, userID uint, userRole role.Role) (ds.INIResearch, []ds.ResearchBiomarker, error) {
+	research, err := r.GetINIResearchByID(id, userID, userRole)
 	if err != nil {
 		return ds.INIResearch{}, nil, err
 	}
@@ -64,9 +80,9 @@ func (r *INIModel) GetINIResearchWithBiomarkers(id uint) (ds.INIResearch, []ds.R
 
 // UpdateResearchPatientInfo - PUT обновление информации о пациенте
 func (r *INIModel) UpdateINIResearchPatientInfo(id uint, patientInfo struct {
-	PatientName   string `json:"patient_name"`
-	PatientBirth  string `json:"patient_birth"`
-	PatientGender string `json:"patient_gender"`
+	PatientName   *string `json:"patient_name,omitempty"`
+	PatientBirth  *string `json:"patient_birth,omitempty"`
+	PatientGender *string `json:"patient_gender,omitempty"`
 }) error {
 	var existingResearch ds.INIResearch
 	err := r.db.Where("id = ? AND status != ?", id, ds.StatusDeleted).First(&existingResearch).Error
@@ -74,19 +90,27 @@ func (r *INIModel) UpdateINIResearchPatientInfo(id uint, patientInfo struct {
 		return err
 	}
 
-	updates := map[string]interface{}{
-		"patient_name":   patientInfo.PatientName,
-		"patient_birth":  patientInfo.PatientBirth,
-		"patient_gender": patientInfo.PatientGender,
+	updates := map[string]interface{}{}
+
+	if patientInfo.PatientName != nil {
+		updates["patient_name"] = patientInfo.PatientName
+	}
+	if patientInfo.PatientBirth != nil {
+		updates["patient_birth"] = patientInfo.PatientBirth
+	}
+	if patientInfo.PatientGender != nil {
+		updates["patient_gender"] = patientInfo.PatientGender
+	}
+
+	if len(updates) == 0 {
+		return nil // Нет изменений
 	}
 
 	return r.db.Model(&ds.INIResearch{}).Where("id = ?", id).Updates(updates).Error
 }
 
 // GetDraftRequestInfo возвращает ID черновика и количество биомаркеров в корзине
-func (r *INIModel) GetDraftRequestInfo() (uint, int, error) {
-	creatorID := GetFixedCreatorID()
-
+func (r *INIModel) GetDraftRequestInfo(creatorID uint) (uint, int, error) {
 	var research ds.INIResearch
 	err := r.db.Where("created_by = ? AND status = ?", creatorID, "черновик").First(&research).Error
 	if err != nil {
@@ -121,13 +145,15 @@ func (r *INIModel) UpdateINIResearchStatus(id uint, newStatus ds.INIResearchStat
 		"status": newStatus,
 	}
 
+	// ИЗМЕНЕНИЕ: Используем указатели на time.Time вместо sql.NullTime
+	now := time.Now()
 	switch newStatus {
 	case ds.StatusFormed:
-		updates["formed_at"] = time.Now()
+		updates["formed_at"] = &now
 	case ds.StatusCompleted, ds.StatusRejected:
-		updates["completed_at"] = time.Now()
+		updates["completed_at"] = &now
 		if moderatorID != nil {
-			updates["moderator_id"] = *moderatorID
+			updates["moderator_id"] = moderatorID
 		}
 	}
 
@@ -158,21 +184,21 @@ func (r *INIModel) isValidINIStatusTransition(current, new ds.INIResearchStatus)
 }
 
 // FormINIResearch - формирование исследования (только создатель)
-func (r *INIModel) FormINIResearch(id uint, creatorID uint) error {
-	// Проверяем что это черновик текущего пользователя
+func (r *INIModel) FormINIResearch(id uint, userID uint) error {
+	// Проверяем что это черновик и принадлежит пользователю
 	var research ds.INIResearch
-	err := r.db.Where("id = ? AND created_by = ? AND status = ?", id, creatorID, ds.StatusDraft).First(&research).Error
+	err := r.db.Where("id = ? AND status = ? AND created_by = ?", id, ds.StatusDraft, userID).First(&research).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("доступен только черновик текущего пользователя")
+			return errors.New("доступен только ваш черновик")
 		}
 		return err
 	}
 
-	// Улучшенная проверка обязательных полей пациента (trim пробелов)
-	if strings.TrimSpace(research.PatientName) == "" ||
-		strings.TrimSpace(research.PatientBirth) == "" ||
-		strings.TrimSpace(research.PatientGender) == "" {
+	// Проверка nullable полей пациента
+	if research.PatientName == nil || *research.PatientName == "" ||
+		research.PatientBirth == nil || *research.PatientBirth == "" ||
+		research.PatientGender == nil || *research.PatientGender == "" {
 		return errors.New("необходимо заполнить все поля пациента: ФИО, дата рождения, пол")
 	}
 
@@ -190,7 +216,7 @@ func (r *INIModel) FormINIResearch(id uint, creatorID uint) error {
 }
 
 // CalculateINIResult рассчитывает итоговый INI результат
-func (r *INIModel) CalculateINIResult(researchID int) (float64, error) {
+func (r *INIModel) CalculateINIResult(researchID uint) (float64, error) {
 	// Получаем все биомаркеры исследования
 	var researchBiomarkers []ds.ResearchBiomarker
 	err := r.db.Preload("Biomarker").Where("id_research = ?", researchID).Find(&researchBiomarkers).Error
@@ -201,13 +227,18 @@ func (r *INIModel) CalculateINIResult(researchID int) (float64, error) {
 	var totalScore float64
 
 	for _, rb := range researchBiomarkers {
+		// Проверяем что значение пациента не nil
+		if rb.PatientValue == nil {
+			continue // пропускаем биомаркеры без значения
+		}
+
 		// Нормализуем значение пациента относительно диапазона нормы
 		valueRange := rb.Biomarker.MaxValue - rb.Biomarker.MinValue
 		if valueRange == 0 {
 			continue // избегаем деления на ноль
 		}
 
-		normalizedValue := (rb.PatientValue - rb.Biomarker.MinValue) / valueRange
+		normalizedValue := (*rb.PatientValue - rb.Biomarker.MinValue) / valueRange
 
 		// Ограничиваем значение между 0 и 1
 		if normalizedValue < 0 {
@@ -241,23 +272,24 @@ func (r *INIModel) CompleteOrRejectINIResearch(id uint, action string, moderator
 
 	switch action {
 	case "complete":
-		// Выполняем расчет INI индекса при завершении
-		iniResult, err := r.CalculateINIResult(int(id)) // ← Исправленный вызов
+		iniResult, err := r.CalculateINIResult(id)
 		if err != nil {
 			return fmt.Errorf("ошибка при расчете INI индекса: %v", err)
 		}
 
-		// Сохраняем результат INI и завершаем исследование
+		modID := &moderatorID
+		now := time.Now()
 		err = r.db.Model(&ds.INIResearch{}).Where("id = ?", id).Updates(map[string]interface{}{
 			"status":       ds.StatusCompleted,
 			"ini_result":   iniResult,
-			"completed_at": time.Now(),
-			"moderator_id": moderatorID,
+			"completed_at": &now,
+			"moderator_id": modID,
 		}).Error
 		return err
 
 	case "reject":
-		return r.UpdateINIResearchStatus(id, ds.StatusRejected, &moderatorID)
+		modID := &moderatorID
+		return r.UpdateINIResearchStatus(id, ds.StatusRejected, modID)
 
 	default:
 		return errors.New("неверное действие. Используйте 'complete' или 'reject'")
@@ -265,9 +297,9 @@ func (r *INIModel) CompleteOrRejectINIResearch(id uint, action string, moderator
 }
 
 // DeleteINIResearch - удаление исследования (только создатель для черновика)
-func (r *INIModel) DeleteINIResearch(id uint, creatorID uint) error {
+func (r *INIModel) DeleteINIResearch(id uint, userID uint) error {
 	tx := r.db.Model(&ds.INIResearch{}).
-		Where("id = ? AND created_by = ? AND status = ?", id, creatorID, ds.StatusDraft).
+		Where("id = ? AND status = ? AND created_by = ?", id, ds.StatusDraft, userID).
 		Update("status", ds.StatusDeleted)
 
 	if tx.Error != nil {
@@ -280,22 +312,27 @@ func (r *INIModel) DeleteINIResearch(id uint, creatorID uint) error {
 }
 
 // AddBiomarkerToDraftResearch добавляет биомаркер в черновик исследования
-func (r *INIModel) AddBiomarkerToDraftINIResearch(biomarkerID uint) (uint, error) {
-	creatorID := GetFixedCreatorID()
-
+func (r *INIModel) AddBiomarkerToDraftINIResearch(biomarkerID uint, creatorID uint) (uint, error) {
 	// Ищем существующий черновик
 	var research ds.INIResearch
 	err := r.db.Where("created_by = ? AND status = ?", creatorID, "черновик").First(&research).Error
 
 	if err != nil {
-		// Создаем новый черновик
+		// Создаем новый черновик с nullable полями
+		patientName := "Новый пациент"
+		patientBirth := "01.01.2000"
+		patientGender := "Мужской"
+
 		research = ds.INIResearch{
 			Status:        "черновик",
 			CreatedBy:     creatorID,
-			PatientName:   "Новый пациент",
-			PatientBirth:  "01.01.2000",
-			PatientGender: "Мужской",
+			PatientName:   &patientName,
+			PatientBirth:  &patientBirth,
+			PatientGender: &patientGender,
 			CreatedAt:     time.Now(),
+			FormedAt:      nil,
+			CompletedAt:   nil,
+			ModeratorID:   nil,
 		}
 
 		err = r.db.Create(&research).Error
@@ -304,11 +341,11 @@ func (r *INIModel) AddBiomarkerToDraftINIResearch(biomarkerID uint) (uint, error
 		}
 	}
 
-	// Добавляем биомаркер в исследование
+	// Добавляем биомаркер в исследование с nil значением
 	researchBiomarker := ds.ResearchBiomarker{
 		IDResearch:   research.ID,
 		IDBiomarker:  biomarkerID,
-		PatientValue: 0, // Значение по умолчанию
+		PatientValue: nil, // Значение по умолчанию - nil
 	}
 
 	err = r.db.Create(&researchBiomarker).Error
@@ -317,4 +354,11 @@ func (r *INIModel) AddBiomarkerToDraftINIResearch(biomarkerID uint) (uint, error
 	}
 
 	return research.ID, nil
+}
+
+// UpdateBiomarkerValue обновляет значение биомаркера в исследовании
+func (r *INIModel) UpdateBiomarkerValue(researchID uint, biomarkerID uint, value *float64) error {
+	return r.db.Model(&ds.ResearchBiomarker{}).
+		Where("id_research = ? AND id_biomarker = ?", researchID, biomarkerID).
+		Update("patient_value", value).Error
 }

@@ -1,8 +1,6 @@
 package ds
 
-//заявки
 import (
-	"database/sql"
 	"time"
 )
 
@@ -17,23 +15,23 @@ const (
 )
 
 type INIResearch struct {
-	ID        uint              `gorm:"primaryKey;autoIncrement"`
-	Status    INIResearchStatus `gorm:"type:varchar(20);not null;check:status IN ('черновик','удалён','сформирован','завершён','отклонён')"`
-	CreatedAt time.Time         `gorm:"not null"`
-	CreatedBy uint              `gorm:"not null"`
+	ID        uint              `gorm:"primaryKey;autoIncrement" json:"id"`
+	Status    INIResearchStatus `gorm:"type:varchar(20);not null;check:status IN ('черновик','удалён','сформирован','завершён','отклонён')" json:"status"`
+	CreatedAt time.Time         `gorm:"not null" json:"created_at"`
+	CreatedBy uint              `gorm:"not null" json:"created_by"`
 
-	// Nullable поля (как в примере)
-	FormedAt    sql.NullTime  `gorm:"default:null"`
-	CompletedAt sql.NullTime  `gorm:"default:null"`
-	ModeratorID sql.NullInt64 `gorm:"default:null"`
+	// Nullable поля - заменяем sql.Null* на указатели
+	FormedAt    *time.Time `gorm:"default:null" json:"formed_at,omitempty"`
+	CompletedAt *time.Time `gorm:"default:null" json:"completed_at,omitempty"`
+	ModeratorID *uint      `gorm:"default:null" json:"moderator_id,omitempty"`
 
-	// Поля по предметной области
-	PatientName   string  `gorm:"type:varchar(100);not null"`
-	PatientBirth  string  `gorm:"type:varchar(10);not null"`
-	PatientGender string  `gorm:"type:varchar(10);not null"`
-	INIResult     float64 `gorm:"type:decimal(5,2);default:null"`
+	// Поля по предметной области - теперь nullable
+	PatientName   *string  `gorm:"type:varchar(100);default:null" json:"patient_name,omitempty"`
+	PatientBirth  *string  `gorm:"type:varchar(10);default:null" json:"patient_birth,omitempty"`
+	PatientGender *string  `gorm:"type:varchar(10);default:null" json:"patient_gender,omitempty"`
+	INIResult     *float64 `gorm:"type:decimal(5,2);default:null" json:"ini_result,omitempty"`
 
-	// Связи (явные, как в примере)
-	User      User `gorm:"foreignKey:CreatedBy"`
-	Moderator User `gorm:"foreignKey:ModeratorID"`
+	// Связи
+	User      *User `gorm:"foreignKey:CreatedBy" json:"user,omitempty"`
+	Moderator *User `gorm:"foreignKey:ModeratorID" json:"moderator,omitempty"`
 }

@@ -32,16 +32,20 @@ func NewApp(c *config.Config, r *gin.Engine, h *handler.INIController) *NutriSca
 func (a *NutriScanApplication) RunApp() {
 	logrus.Info("Server start up")
 
-	// Регистрируем API маршруты вместо старых HTML маршрутов
-	a.Handler.RegisterAPI(a.Router) // ← ИЗМЕНИЛИ: RegisterAPI вместо RegisterHandler
+	// Регистрируем API маршруты
+	a.Handler.RegisterAPI(a.Router)
 
-	//Регситририуем SwaggerUI
+	// Регистрируем SwaggerUI
 	a.Router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	// Убираем статику и шаблоны для SPA
-	// a.Handler.RegisterStatic(a.Router) // ← КОММЕНТИРУЕМ
+	// Гарантируем использование порта из конфигурации
+	port := a.Config.ServicePort
+	host := a.Config.ServiceHost
 
-	serverAddress := fmt.Sprintf("%s:%d", a.Config.ServiceHost, a.Config.ServicePort)
+	serverAddress := fmt.Sprintf("%s:%d", host, port)
+
+	logrus.Infof("Listening and serving HTTP on %s", serverAddress)
+
 	if err := a.Router.Run(serverAddress); err != nil {
 		logrus.Fatal(err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -12,9 +13,10 @@ import (
 )
 
 type INIModel struct {
-	db     *gorm.DB
-	minio  *minio.Client
-	bucket string
+	db        *gorm.DB
+	minio     *minio.Client
+	bucket    string
+	jwtSecret string
 }
 
 func NewINIModel(dsn string, minioEndpoint, minioAccessKey, minioSecretKey, bucket string, useSSL bool) (*INIModel, error) {
@@ -45,11 +47,23 @@ func NewINIModel(dsn string, minioEndpoint, minioAccessKey, minioSecretKey, buck
 		}
 	}
 
+	// Получаем JWT секрет из переменных окружения
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "fallback-secret-key-change-in-production"
+	}
+
 	return &INIModel{
-		db:     db,
-		minio:  minioClient,
-		bucket: bucket,
+		db:        db,
+		minio:     minioClient,
+		bucket:    bucket,
+		jwtSecret: jwtSecret,
 	}, nil
+}
+
+// GetJWTSecret возвращает секрет для JWT
+func (r *INIModel) GetJWTSecret() string {
+	return r.jwtSecret
 }
 
 // Фиксированные пользователи как в задании

@@ -13,7 +13,7 @@ func FromEnv() string {
 	}
 	port := os.Getenv("DB_PORT")
 	user := os.Getenv("DB_USER")
-	pass := os.Getenv("DB_PASS")
+	pass := os.Getenv("DB_PASSWORD")
 	dbname := os.Getenv("DB_NAME")
 
 	fmt.Printf("Connecting to: host=%s port=%s user=%s dbname=%s\n", host, port, user, dbname)

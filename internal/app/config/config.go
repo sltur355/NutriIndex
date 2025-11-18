@@ -1,7 +1,11 @@
+// C:\RIP\LAB1\internal\app\config\config.go
 package config
 
 import (
+	"fmt"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
@@ -11,16 +15,36 @@ import (
 type Config struct {
 	ServiceHost string
 	ServicePort int
-	MinIO       MinIOConfig
+
+	Redis RedisConfig
+	Minio MinioConfig
 }
 
-type MinIOConfig struct {
-	Endpoint        string
-	AccessKeyID     string
-	SecretAccessKey string
-	BucketName      string
-	UseSSL          bool
+type RedisConfig struct {
+	Host        string
+	Password    string
+	Port        int
+	User        string
+	DialTimeout time.Duration
+	ReadTimeout time.Duration
 }
+
+type MinioConfig struct {
+	Endpoint  string
+	Bucket    string
+	AccessKey string
+	SecretKey string
+	UseSSL    bool
+}
+
+const (
+	envRedisHost = "REDIS_HOST"
+	envRedisPort = "REDIS_PORT"
+	envRedisUser = "REDIS_USER"
+	envRedisPass = "REDIS_PASSWORD"
+)
+
+// C:\RIP\LAB1\internal\app\config\config.go
 
 func NewConfig() (*Config, error) {
 	var err error
@@ -48,7 +72,60 @@ func NewConfig() (*Config, error) {
 		return nil, err
 	}
 
+	// Принудительно устанавливаем порт сервиса если он не задан
+	if cfg.ServicePort == 0 {
+		cfg.ServicePort = 8081
+		log.Warn("ServicePort not set in config, using default: 8081")
+	}
+
+	// Принудительно устанавливаем хост сервиса если он не задан
+	if cfg.ServiceHost == "" {
+		cfg.ServiceHost = "localhost"
+	}
+
+	// Redis config from env
+	cfg.Redis.Host = os.Getenv(envRedisHost)
+	if cfg.Redis.Host == "" {
+		cfg.Redis.Host = "localhost"
+	}
+
+	portStr := os.Getenv(envRedisPort)
+	if portStr != "" {
+		cfg.Redis.Port, err = strconv.Atoi(portStr)
+		if err != nil {
+			return nil, fmt.Errorf("redis port must be int value: %w", err)
+		}
+	} else {
+		cfg.Redis.Port = 6379 // порт по умолчанию
+	}
+
+	cfg.Redis.Password = os.Getenv(envRedisPass)
+	cfg.Redis.User = os.Getenv(envRedisUser)
+
+	// Устанавливаем таймауты по умолчанию если не заданы
+	if cfg.Redis.DialTimeout == 0 {
+		cfg.Redis.DialTimeout = 10 * time.Second
+	}
+	if cfg.Redis.ReadTimeout == 0 {
+		cfg.Redis.ReadTimeout = 10 * time.Second
+	}
+
+	// Проверяем обязательные поля MinIO
+	if cfg.Minio.Bucket == "" {
+		cfg.Minio.Bucket = "biomarkers" // значение по умолчанию
+	}
+	if cfg.Minio.Endpoint == "" {
+		cfg.Minio.Endpoint = "127.0.0.1:9000"
+	}
+	if cfg.Minio.AccessKey == "" {
+		cfg.Minio.AccessKey = "minio"
+	}
+	if cfg.Minio.SecretKey == "" {
+		cfg.Minio.SecretKey = "minio124"
+	}
+
 	log.Info("config parsed")
+	log.Infof("Service configuration: Host=%s, Port=%d", cfg.ServiceHost, cfg.ServicePort)
 
 	return cfg, nil
 }

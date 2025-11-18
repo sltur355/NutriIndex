@@ -11,7 +11,22 @@ import (
 
 // ResearchBiomarker (м-м связь) API
 
-// UpdateResearchBiomarkerAPI - PUT /api/research_biomarkers/:research_id/biomarkers/:biomarker_id
+// UpdateResearchBiomarkerAPI godoc
+// @Summary Обновить значение биомаркера в исследовании
+// @Description Обновляет значение пациента для биомаркера в исследовании (только для врачей)
+// @Tags Исследования
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Param research_id path int true "ID исследования"
+// @Param biomarker_id path int true "ID биомаркера"
+// @Param updates body object true "Обновляемые поля" SchemaExample({"patient_value": 42.5})
+// @Success 200 {object} map[string]interface{} "Значение обновлено"
+// @Failure 400 {object} map[string]interface{} "Неверные данные"
+// @Failure 401 {object} map[string]interface{} "Не авторизован"
+// @Failure 403 {object} map[string]interface{} "Недостаточно прав"
+// @Failure 404 {object} map[string]interface{} "Исследование или биомаркер не найдены"
+// @Router /research_biomarkers/{research_id}/biomarkers/{biomarker_id} [put]
 func (h *INIController) UpdateResearchBiomarkerAPI(ctx *gin.Context) {
 	researchIDStr := ctx.Param("research_id")
 	biomarkerIDStr := ctx.Param("biomarker_id")
@@ -44,12 +59,24 @@ func (h *INIController) UpdateResearchBiomarkerAPI(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"status":  "success",
 		"message": "Research biomarker updated successfully",
 	})
 }
 
-// DeleteResearchBiomarkerAPI - DELETE /api/research_biomarkers/:research_id/biomarkers/:biomarker_id
+// DeleteResearchBiomarkerAPI godoc
+// @Summary Удалить биомаркер из исследования
+// @Description Удаляет биомаркер из исследования (только для врачей)
+// @Tags Исследования
+// @Security ApiKeyAuth
+// @Produce json
+// @Param research_id path int true "ID исследования"
+// @Param biomarker_id path int true "ID биомаркера"
+// @Success 200 {object} map[string]interface{} "Биомаркер удален из исследования"
+// @Failure 400 {object} map[string]interface{} "Неверные данные"
+// @Failure 401 {object} map[string]interface{} "Не авторизован"
+// @Failure 403 {object} map[string]interface{} "Недостаточно прав"
+// @Failure 404 {object} map[string]interface{} "Исследование или биомаркер не найдены"
+// @Router /research_biomarkers/{research_id}/biomarkers/{biomarker_id} [delete]
 func (h *INIController) DeleteResearchBiomarkerAPI(ctx *gin.Context) {
 	researchIDStr := ctx.Param("research_id")
 	biomarkerIDStr := ctx.Param("biomarker_id")
@@ -76,7 +103,6 @@ func (h *INIController) DeleteResearchBiomarkerAPI(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"status":  "success",
 		"message": "Biomarker removed from research successfully",
 	})
 }
