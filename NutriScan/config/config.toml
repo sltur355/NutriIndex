@@ -1,0 +1,13 @@
+ServiceHost = "0.0.0.0"
+ServicePort = 8081
+
+[Redis]
+DialTimeout = "10s"
+ReadTimeout = "10s"
+
+[Minio]
+Endpoint = "127.0.0.1:9000"
+Bucket = "biomarkers"
+AccessKey = "minio"
+SecretKey = "minio124"
+UseSSL = false
